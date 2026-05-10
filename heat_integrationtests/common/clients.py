@@ -152,6 +152,8 @@ class ClientManager(object):
         args = {
             'auth_version': self.KEYSTONE_API_VERSION,
             'session': self.identity_client.session,
+            'cacert': self.ca_file or None,
+            'insecure': self.insecure,
             'os_options': {'endpoint_type': 'publicURL',
                            'region_name': self.conf.region,
                            'service_type': 'object-store'},
