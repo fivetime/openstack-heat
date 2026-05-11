@@ -25,6 +25,7 @@
       devstack_localrc:
         CEILOMETER_PIPELINE_INTERVAL: 60
         HEAT_ENABLE_ADOPT_ABANDON: True
+        CINDER_BACKUP_DRIVER: swift
       devstack_services:
         tempest: true
         openstack-cli-server: false
@@ -60,9 +61,8 @@
               credential_secret_id: $OS_CREDENTIAL_SECRET_ID
             heat_features_enabled:
               multi_cloud: True
-            # disable cinder backup feature
             volume-feature-enabled:
-              backup: False
+              backup: True
       test_results_stage_name: test_results
       zuul_copy_output:
         '{{ devstack_base_dir }}/tempest/etc/tempest.conf': logs
