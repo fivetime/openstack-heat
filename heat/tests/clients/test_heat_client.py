@@ -60,7 +60,8 @@ class KeystoneClientTest(common.HeatTestCase):
         self.m_load_auth = self.patchobject(
             ks_loading, 'load_auth_from_conf_options')
 
-        cfg.CONF.set_override('auth_uri', 'http://server.test:5000/v2.0',
+        cfg.CONF.set_override('www_authenticate_uri',
+                              'http://server.test:5000/v2.0',
                               group='keystone_authtoken')
         cfg.CONF.set_override('stack_user_domain_id', 'adomain123')
         cfg.CONF.set_override('stack_domain_admin', 'adminuser123')
