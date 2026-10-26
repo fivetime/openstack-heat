@@ -64,7 +64,8 @@ class FakeCluster(object):
         self.timeout = 3600
         self.max_size = -1
         self.min_size = 0
-        self.location = 'actions/fake-action'
+        # As in the SDK: the cloud location, not the action of the request.
+        self.location = {'cloud': 'defaults', 'region_name': 'RegionOne'}
         self.profile_name = 'fake_profile'
         self.profile_id = 'fake_profile_id'
 

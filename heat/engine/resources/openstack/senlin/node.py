@@ -119,12 +119,13 @@ class Node(res_base.BaseSenlinResource):
         }
 
         node = self.client().create_node(**params)
-        action_id = node.location.split('/')[-1]
         self.resource_id_set(node.id)
-        return action_id
+        # The SDK drops the Location header that names the action; the node
+        # is INIT until the action makes it ACTIVE or ERROR, as a cluster.
+        return node.id
 
-    def check_create_complete(self, action_id):
-        return self.client_plugin().check_action_status(action_id)
+    def check_create_complete(self, node_id):
+        return self.client_plugin().node_is_active(node_id)
 
     def handle_delete(self):
         if self.resource_id is not None:

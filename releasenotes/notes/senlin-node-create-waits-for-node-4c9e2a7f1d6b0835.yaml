@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    Creating an ``OS::Senlin::Node`` no longer fails looking for the action
+    in the node the SDK returns; it waits for the node to be ``ACTIVE``, as
+    an ``OS::Senlin::Cluster`` does.

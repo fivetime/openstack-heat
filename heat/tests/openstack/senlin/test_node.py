@@ -54,7 +54,8 @@ class FakeNode(object):
         self.profile_id = "fake_profile_id"
         self.cluster_id = "fake_cluster_id"
         self.details = {'id': 'physical_object_id'}
-        self.location = "actions/fake_action"
+        # As in the SDK: the cloud location, not the action of the request.
+        self.location = {'cloud': 'defaults', 'region_name': 'RegionOne'}
 
     def to_dict(self):
         return {
@@ -119,17 +120,26 @@ class SenlinNodeTest(common.HeatTestCase):
         self.senlin_mock.create_node.assert_called_once_with(
             **expect_kwargs)
 
+    def test_node_create_waits_for_node(self):
+        self.senlin_mock.create_node.return_value = FakeNode(status='INIT')
+        self.senlin_mock.get_node.side_effect = [
+            FakeNode(status='INIT'), FakeNode(status='CREATING'),
+            FakeNode(status='ACTIVE')]
+        scheduler.TaskRunner(self.node.create)()
+        self.assertEqual((self.node.CREATE, self.node.COMPLETE),
+                         self.node.state)
+        self.assertEqual(3, self.senlin_mock.get_node.call_count)
+
     def test_node_create_error(self):
         cfg.CONF.set_override('action_retry_limit', 0)
         self.senlin_mock.create_node.return_value = self.fake_node
-        mock_action = mock.MagicMock()
-        mock_action.status = 'FAILED'
-        mock_action.status_reason = 'oops'
-        self.senlin_mock.get_action.return_value = mock_action
+        failed = FakeNode(status='ERROR')
+        failed.status_reason = 'oops'
+        self.senlin_mock.get_node.return_value = failed
         create_task = scheduler.TaskRunner(self.node.create)
         ex = self.assertRaises(exception.ResourceFailure, create_task)
         expected = ('ResourceInError: resources.senlin-node: '
-                    'Went to status FAILED due to "oops"')
+                    'Went to status ERROR due to "oops"')
         self.assertEqual(expected, str(ex))
 
     def test_node_delete_success(self):
@@ -173,8 +183,8 @@ class SenlinNodeTest(common.HeatTestCase):
         self.senlin_mock.patch.assert_called_once_with(
             '/nodes/%s' % node.resource_id, json=node_update_body,
             raise_exc=False)
-        self.senlin_mock.get_action.assert_called_with('fake-action')
-        self.assertEqual(2, self.senlin_mock.get_action.call_count)
+        # Creating the node waited for the node, updating it for the action.
+        self.senlin_mock.get_action.assert_called_once_with('fake-action')
 
     def test_node_update_cluster(self):
         node = self._create_node()
@@ -218,7 +228,7 @@ class SenlinNodeTest(common.HeatTestCase):
                     'status FAILED due to "oops"')
         self.assertEqual(expected, str(ex))
         self.assertEqual((node.UPDATE, node.FAILED), node.state)
-        self.assertEqual(2, self.senlin_mock.get_action.call_count)
+        self.senlin_mock.get_action.assert_called_once_with('fake-action')
 
     def test_cluster_resolve_attribute(self):
         excepted_show = {

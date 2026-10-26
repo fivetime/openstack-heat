@@ -61,6 +61,17 @@ class SenlinClientPlugin(sdk_plugin.OpenStackSDKPlugin):
             )
         return False
 
+    def node_is_active(self, node_id):
+        node = self.client().get_node(node_id)
+        if node.status == 'ACTIVE':
+            return True
+        elif node.status == 'ERROR':
+            raise exception.ResourceInError(
+                status_reason=node.status_reason,
+                resource_status=node.status,
+            )
+        return False
+
     def get_profile_id(self, profile_name):
         profile = self.client().get_profile(profile_name)
         return profile.id
