@@ -175,14 +175,17 @@ class Policy(res_base.BaseSenlinResource):
         return copy.deepcopy(self.properties[self.BINDINGS])
 
     def check_delete_complete(self, bindings):
-        if not bindings:
+        if not self.resource_id:
             return True
-        self.remove_bindings(bindings)
-        if self.check_action_done(bindings):
-            with self.client_plugin().ignore_not_found:
-                self.client().delete_policy(self.resource_id)
-                return True
-        return False
+        # A policy without bindings, attached through the policies of a
+        # cluster for one, is deleted all the same.
+        if bindings:
+            self.remove_bindings(bindings)
+            if not self.check_action_done(bindings):
+                return False
+        with self.client_plugin().ignore_not_found:
+            self.client().delete_policy(self.resource_id)
+        return True
 
     def handle_update(self, json_snippet, tmpl_diff, prop_diff):
         if self.NAME in prop_diff:

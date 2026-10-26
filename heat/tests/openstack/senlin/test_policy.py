@@ -157,6 +157,22 @@ class SenlinPolicyTest(common.HeatTestCase):
         self.senlin_mock.delete_policy.assert_called_once_with(
             policy.resource_id)
 
+    def test_policy_delete_without_bindings(self):
+        # A policy attached through the policies of a cluster has no
+        # bindings of its own.
+        t = copy.deepcopy(self.t)
+        del t['resources']['senlin-policy']['properties']['bindings']
+        policy = self._init_policy(t)
+        self.senlin_mock.create_policy.return_value = self.fake_p
+        scheduler.TaskRunner(policy.create)()
+        self.assertEqual((policy.CREATE, policy.COMPLETE), policy.state)
+        scheduler.TaskRunner(policy.delete)()
+        self.assertEqual((policy.DELETE, policy.COMPLETE), policy.state)
+        self.senlin_mock.attach_policy_to_cluster.assert_not_called()
+        self.senlin_mock.detach_policy_from_cluster.assert_not_called()
+        self.senlin_mock.delete_policy.assert_called_once_with(
+            policy.resource_id)
+
     def test_policy_update(self):
         policy = self._create_policy(self.t)
         # Mock translate rules

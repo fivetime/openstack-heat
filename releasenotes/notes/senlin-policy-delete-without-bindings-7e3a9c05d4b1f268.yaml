@@ -1,0 +1,6 @@
+---
+fixes:
+  - |
+    An ``OS::Senlin::Policy`` without ``bindings``, for example one attached
+    through the ``policies`` of an ``OS::Senlin::Cluster``, is deleted from
+    senlin when its stack is deleted. It used to be left behind.
