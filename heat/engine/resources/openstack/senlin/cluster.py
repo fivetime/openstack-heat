@@ -263,7 +263,6 @@ class Cluster(res_base.BaseSenlinResource):
         actions = []
         if not prop_diff:
             return actions
-        cluster_obj = self.client().get_cluster(self.resource_id)
         # Update Policies
         if self.POLICIES in prop_diff:
             old_policies = self.properties[self.POLICIES]
@@ -319,11 +318,19 @@ class Cluster(res_base.BaseSenlinResource):
         if any(p in prop_diff for p in UPDATE_PROPS):
             params = dict((k, v) for k, v in prop_diff.items()
                           if k in UPDATE_PROPS)
-            params['cluster'] = cluster_obj
+            params['cluster'] = self.resource_id
             if self.PROFILE in params:
                 params['profile_id'] = params.pop(self.PROFILE)
-
-            self.client().update_cluster(**params)
+            # Wait for the action: until senlin starts it the cluster is
+            # still ACTIVE, and a replaced profile would be deleted while
+            # the nodes still use it.
+            action = {
+                'func': 'update_cluster',
+                'params': params,
+                'action_id': None,
+                'done': False,
+            }
+            actions.append(action)
             action = {
                 'cluster_id': self.resource_id,
                 'done': False

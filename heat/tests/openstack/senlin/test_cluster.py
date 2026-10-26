@@ -17,6 +17,7 @@ import copy
 from unittest import mock
 
 from oslo_config import cfg
+import requests
 
 from heat.common import exception
 from heat.common import template_format
@@ -82,6 +83,13 @@ class FakeCluster(object):
             'profile_name': self.profile_name,
             'profile_id': self.profile_id
         }
+
+
+def action_response(action_id='fake-action'):
+    resp = requests.Response()
+    resp.status_code = 202
+    resp.headers['Location'] = 'http://senlin/v1/actions/%s' % action_id
+    return resp
 
 
 class SenlinClusterTest(common.HeatTestCase):
@@ -195,19 +203,65 @@ class SenlinClusterTest(common.HeatTestCase):
         props['name'] = 'new_name'
         rsrc_defns = template.Template(new_t).resource_definitions(self.stack)
         new_cluster = rsrc_defns['senlin-cluster']
-        self.senlin_mock.update_cluster.return_value = mock.Mock(
-            cluster=new_cluster)
+        self.senlin_mock.patch.return_value = action_response('update')
         self.senlin_mock.get_action.return_value = mock.Mock(
             status='SUCCEEDED')
         scheduler.TaskRunner(cluster.update, new_cluster)()
         self.assertEqual((cluster.UPDATE, cluster.COMPLETE), cluster.state)
-        cluster_update_kwargs = {
+        cluster_update_body = {'cluster': {
             'profile_id': 'new_profile_id',
             'name': 'new_name'
-        }
-        self.senlin_mock.update_cluster.assert_called_once_with(
-            cluster=self.fake_cl, **cluster_update_kwargs)
-        self.assertEqual(1, self.senlin_mock.get_action.call_count)
+        }}
+        self.senlin_mock.patch.assert_called_once_with(
+            '/clusters/%s' % cluster.resource_id, json=cluster_update_body,
+            raise_exc=False)
+        self.senlin_mock.get_action.assert_called_with('update')
+        self.assertEqual(2, self.senlin_mock.get_action.call_count)
+
+    def test_cluster_update_waits_for_action(self):
+        # Until senlin starts the update the cluster is still ACTIVE: the
+        # update is complete when its action is, not when the cluster is.
+        cluster = self._create_cluster(self.t)
+        self.senlin_mock.get_profile.side_effect = [
+            mock.Mock(id='new_profile_id'),
+            mock.Mock(id='fake_profile_id'),
+            mock.Mock(id='new_profile_id'),
+        ]
+        new_t = copy.deepcopy(self.t)
+        props = new_t['resources']['senlin-cluster']['properties']
+        props['profile'] = 'new_profile'
+        rsrc_defns = template.Template(new_t).resource_definitions(self.stack)
+        new_cluster = rsrc_defns['senlin-cluster']
+        self.senlin_mock.patch.return_value = action_response('update')
+        self.senlin_mock.get_action.side_effect = [
+            mock.Mock(status='READY'), mock.Mock(status='RUNNING'),
+            mock.Mock(status='SUCCEEDED')]
+        scheduler.TaskRunner(cluster.update, new_cluster)()
+        self.assertEqual((cluster.UPDATE, cluster.COMPLETE), cluster.state)
+        self.assertEqual([mock.call('update')] * 3,
+                         self.senlin_mock.get_action.call_args_list[1:])
+
+    def test_cluster_update_profile_refused(self):
+        cluster = self._create_cluster(self.t)
+        new_t = copy.deepcopy(self.t)
+        props = new_t['resources']['senlin-cluster']['properties']
+        props['name'] = 'new_name'
+        rsrc_defns = template.Template(new_t).resource_definitions(self.stack)
+        new_cluster = rsrc_defns['senlin-cluster']
+        resp = requests.Response()
+        resp.status_code = 400
+        resp.request = requests.Request(
+            'PATCH', 'http://senlin/v1/clusters/%s' % cluster.resource_id
+        ).prepare()
+        resp.headers['Content-Type'] = 'application/json'
+        resp._content = (b'{"code": 400, "error": {"code": 400, '
+                         b'"message": "bad name", "type": "BadRequest"}}')
+        self.senlin_mock.patch.return_value = resp
+        exc = self.assertRaises(
+            exception.ResourceFailure,
+            scheduler.TaskRunner(cluster.update, new_cluster))
+        self.assertIn('bad name', str(exc))
+        self.assertEqual((cluster.UPDATE, cluster.FAILED), cluster.state)
 
     def test_cluster_update_desire_capacity(self):
         cluster = self._create_cluster(self.t)

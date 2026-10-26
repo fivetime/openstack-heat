@@ -1,0 +1,10 @@
+---
+fixes:
+  - |
+    An update of an ``OS::Senlin::Cluster`` waits for the action senlin
+    started to finish. It used to be complete as soon as the cluster was
+    ``ACTIVE``, which it still is until senlin starts the action, so a
+    replaced ``OS::Senlin::Profile`` was deleted while the nodes still used
+    it and the stack update failed with a conflict. An update of an
+    ``OS::Senlin::Node`` no longer fails looking for the action in the node
+    the SDK returns.

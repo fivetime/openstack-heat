@@ -14,6 +14,7 @@
 from unittest import mock
 
 from openstack import exceptions
+import requests
 
 from heat.engine.clients.os import senlin as senlin_plugin
 from heat.tests import common
@@ -45,6 +46,57 @@ class SenlinClientPluginTest(common.HeatTestCase):
         mock_get.return_value = mock_action
         self.assertTrue(self.plugin.check_action_status('fake_id'))
         mock_get.assert_called_once_with('fake_id')
+
+    def _response(self, status, location=None, body=None):
+        resp = requests.Response()
+        resp.status_code = status
+        if location:
+            resp.headers['Location'] = location
+        if body:
+            resp.headers['Content-Type'] = 'application/json'
+            resp._content = body
+        return resp
+
+    def test_update_cluster(self):
+        mock_patch = self.patchobject(
+            self.client, 'patch', return_value=self._response(
+                202, 'http://senlin/v1/actions/fake-action'))
+        ret = self.plugin.update_cluster('fake-cluster', name='new')
+        self.assertEqual({'action': 'fake-action'}, ret)
+        mock_patch.assert_called_once_with(
+            '/clusters/fake-cluster', json={'cluster': {'name': 'new'}},
+            raise_exc=False)
+
+    def test_update_node(self):
+        mock_patch = self.patchobject(
+            self.client, 'patch', return_value=self._response(
+                202, 'http://senlin/v1/actions/fake-action'))
+        ret = self.plugin.update_node('fake-node', profile_id='new')
+        self.assertEqual({'action': 'fake-action'}, ret)
+        mock_patch.assert_called_once_with(
+            '/nodes/fake-node', json={'node': {'profile_id': 'new'}},
+            raise_exc=False)
+
+    def test_update_node_not_found(self):
+        self.patchobject(self.client, 'patch', return_value=self._response(
+            404, body=b'{"error": {"message": "no node"}}'))
+        self.assertRaises(exceptions.NotFoundException,
+                          self.plugin.update_node, 'fake-node', name='new')
+
+    def test_execute_actions_update_node(self):
+        self.patchobject(self.client, 'patch', return_value=self._response(
+            202, 'http://senlin/v1/actions/fake-action'))
+        mock_get = self.patchobject(self.client, 'get_action')
+        mock_get.return_value = mock.Mock(status='SUCCEEDED')
+        actions = [{'func': 'update_node', 'action_id': None,
+                    'params': {'node': 'fake-node', 'name': 'new'},
+                    'done': False}]
+        self.assertFalse(self.plugin.execute_actions(actions))
+        self.assertEqual('fake-action', actions[0]['action_id'])
+        self.assertFalse(self.plugin.execute_actions(actions))
+        self.assertTrue(actions[0]['done'])
+        self.assertTrue(self.plugin.execute_actions(actions))
+        mock_get.assert_called_once_with('fake-action')
 
     def test_get_profile_id(self):
         mock_profile = mock.Mock(id='fake_profile_id')

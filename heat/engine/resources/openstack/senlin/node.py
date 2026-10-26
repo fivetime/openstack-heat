@@ -163,9 +163,8 @@ class Node(res_base.BaseSenlinResource):
                 }
                 actions.append(action)
             if prop_diff:
-                node = self.client().get_node(self.resource_id)
                 params = copy.deepcopy(prop_diff)
-                params['node'] = node
+                params['node'] = self.resource_id
                 action = {
                     'func': 'update_node',
                     'action_id': None,

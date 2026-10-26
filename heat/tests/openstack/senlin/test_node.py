@@ -16,6 +16,7 @@ import copy
 from unittest import mock
 
 from oslo_config import cfg
+import requests
 
 from heat.common import exception
 from heat.common import template_format
@@ -65,6 +66,13 @@ class FakeNode(object):
             'profile_id': self.profile_id,
             'cluster_id': self.cluster_id,
         }
+
+
+def action_response(action_id='fake-action'):
+    resp = requests.Response()
+    resp.status_code = 202
+    resp.headers['Location'] = 'http://senlin/v1/actions/%s' % action_id
+    return resp
 
 
 class SenlinNodeTest(common.HeatTestCase):
@@ -155,16 +163,17 @@ class SenlinNodeTest(common.HeatTestCase):
         props['name'] = 'new_name'
         rsrc_defns = template.Template(new_t).resource_definitions(self.stack)
         new_node = rsrc_defns['senlin-node']
-        self.senlin_mock.update_node.return_value = mock.Mock(
-            location='/actions/fake-action')
+        self.senlin_mock.patch.return_value = action_response()
         scheduler.TaskRunner(node.update, new_node)()
         self.assertEqual((node.UPDATE, node.COMPLETE), node.state)
-        node_update_kwargs = {
+        node_update_body = {'node': {
             'profile_id': 'new_profile_id',
             'name': 'new_name'
-        }
-        self.senlin_mock.update_node.assert_called_once_with(
-            node=self.fake_node, **node_update_kwargs)
+        }}
+        self.senlin_mock.patch.assert_called_once_with(
+            '/nodes/%s' % node.resource_id, json=node_update_body,
+            raise_exc=False)
+        self.senlin_mock.get_action.assert_called_with('fake-action')
         self.assertEqual(2, self.senlin_mock.get_action.call_count)
 
     def test_node_update_cluster(self):
@@ -200,8 +209,7 @@ class SenlinNodeTest(common.HeatTestCase):
         props['name'] = 'new_name'
         rsrc_defns = template.Template(new_t).resource_definitions(self.stack)
         new_node = rsrc_defns['senlin-node']
-        self.senlin_mock.update_node.return_value = mock.Mock(
-            location='/actions/fake-action')
+        self.senlin_mock.patch.return_value = action_response()
         self.senlin_mock.get_action.return_value = mock.Mock(
             status='FAILED', status_reason='oops')
         update_task = scheduler.TaskRunner(node.update, new_node)

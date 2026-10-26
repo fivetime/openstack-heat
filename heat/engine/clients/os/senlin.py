@@ -73,6 +73,21 @@ class SenlinClientPlugin(sdk_plugin.OpenStackSDKPlugin):
         policy = self.client().get_policy(policy_name)
         return policy.id
 
+    def _update(self, collection, key, entity_id, attrs):
+        # The SDK's update_cluster and update_node return the entity; the
+        # action senlin started is only in the Location header, which they
+        # drop.
+        resp = self.client().patch('/%s/%s' % (collection, entity_id),
+                                   json={key: attrs}, raise_exc=False)
+        exceptions.raise_from_response(resp)
+        return {'action': resp.headers['Location'].split('/')[-1]}
+
+    def update_cluster(self, cluster, **attrs):
+        return self._update('clusters', 'cluster', cluster, attrs)
+
+    def update_node(self, node, **attrs):
+        return self._update('nodes', 'node', node, attrs)
+
     def is_bad_request(self, ex):
         return (isinstance(ex, exceptions.HttpException) and
                 ex.status_code == 400)
@@ -85,12 +100,12 @@ class SenlinClientPlugin(sdk_plugin.OpenStackSDKPlugin):
             all_executed = False
             if 'action_id' in action:
                 if action['action_id'] is None:
-                    func = getattr(self.client(), action['func'])
+                    # update_cluster and update_node are this plugin's own.
+                    func = getattr(self, action['func'], None)
+                    if func is None:
+                        func = getattr(self.client(), action['func'])
                     ret = func(**action['params'])
-                    if isinstance(ret, dict):
-                        action['action_id'] = ret['action']
-                    else:
-                        action['action_id'] = ret.location.split('/')[-1]
+                    action['action_id'] = ret['action']
                 else:
                     ret = self.check_action_status(action['action_id'])
                     action['done'] = ret
