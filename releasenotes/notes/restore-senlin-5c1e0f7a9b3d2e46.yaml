@@ -1,0 +1,8 @@
+---
+features:
+  - |
+    The Senlin resources ``OS::Senlin::Cluster``, ``OS::Senlin::Node``,
+    ``OS::Senlin::Policy``, ``OS::Senlin::Profile`` and
+    ``OS::Senlin::Receiver`` are supported again, with the senlin client
+    plugin and the senlin constraints. They call the clustering service
+    through openstacksdk.
