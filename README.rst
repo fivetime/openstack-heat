@@ -67,4 +67,5 @@ We have integration with
 * https://opendev.org/openstack/python-zunclient (container management service)
 * https://opendev.org/openstack/python-blazarclient (reservation service)
 * https://opendev.org/openstack/python-octaviaclient (Load-balancer service)
+* https://opendev.org/openstack/python-senlinclient (Clustering service)
 * https://opendev.org/openstack/python-ironicclient (baremetal provisioning service)
